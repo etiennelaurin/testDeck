@@ -1,26 +1,87 @@
 ---
-title       : Test deck
-subtitle    : 
-author      : 
-job         : 
+title       : Canada's Gross Domestic Product (GDP) estimator
+subtitle    : An homework assignment for the Developing Data Products course
+author      : Etienne Laurin
+job         : Student
 framework   : io2012        # {io2012, html5slides, shower, dzslides, ...}
 highlighter : highlight.js  # {highlight.js, prettify, highlight}
 hitheme     : tomorrow      # 
 widgets     : []            # {mathjax, quiz, bootstrap}
 mode        : selfcontained # {standalone, draft}
----
-
-## Read-And-Delete
-
-1. Edit YAML front matter
-2. Write using R Markdown
-3. Use an empty line followed by three dashes to separate slides!
 
 --- .class #id 
 
-## Slide 2
+## Overview
 
-```{r, fig.height=5, fig.width=5}
-plot(1 : 10, 1 : 10)
+This is an overview of the application "[Canada's Gross Domestic Product (GDP)](https://etiennelaurin.shinyapps.io/CanadaGDP/)".
+
+To run it, follow the link above and select a year and a territory.
+
+In the right panel, you will see the estimate in million chained (2007) dollars.
+
+--- .class #id 
+
+## Data and Methodology
+
+Origin of the data:
+* Statistics Canada, Canada's official federal statistics agency
+* Based on the GDP data from 1981 to 2012
+* Public data
+* CANSIM table 384-0038
+
+Predictors use:
+* Province or territory
+* Year
+ 
+Method:
+* Generalized linear model (GLM)
+
+--- .class #id 
+
+## Purpose
+
+* GDP growth is an indicator of economic prosperity
+
+```{r, echo=FALSE, cache=TRUE, results='hide'}
+library(caret)
+
+# Download the file
+tf = tempfile()
+download.file("http://www20.statcan.gc.ca/tables-tableaux/cansim/csv/03840038-eng.zip", tf)
+fname = unzip(tf, list=TRUE)$Name[1]
+
+# Read the data and subset only the data needed
+gdp <- read.table(unzip(tf, files=fname), header=TRUE, sep=",", dec = ".", na.strings ="..")
+gdp <- subset(gdp[c("Ref_Date","GEO","Value")], gdp$PRI == "Chained (2007) dollars" & gdp$EST == "Final consumption expenditure (x 1,000,000)" & !(is.na(gdp$Value)))
+
+# Split in a training and testing set
+set.seed(50)
+inTrain = createDataPartition(gdp$Value, p=0.8, list=TRUE)[[1]]
+training = gdp[ inTrain,]
+testing = gdp[-inTrain,]
+
+# Create a model
+model <- train(Value ~ ., data=gdp, method="glm")
+predictions <- predict(model, newdata=testing)
+
+# Prediction function
+nd <- data.frame(2016, "Quebec")
+names(nd) <- c("Ref_Date","GEO")
+result <- predict(model, nd)
 ```
 
+For example, in the year 2016, ceteris paribus, Quebec's GDP should be approximately `r paste(round(result))` million chained (2007) dollars.
+
+--- .class #id 
+
+## Accuracy
+
+```{r, echo=FALSE, cache=TRUE, results='hide'}
+pr <- postResample(predictions, testing$Value)
+```
+
+Root mean squared error:
+`r pr[[1]]`
+
+R squared:
+`r pr[[2]]`
